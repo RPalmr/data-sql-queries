@@ -3,69 +3,99 @@
 def detailed_movies(db):
     '''return the list of movies with their genres and director name'''
     query = """
-    SELECT m.title, m.genres, d.name
-           FROM movies AS m
-           JOIN directors AS d ON m.director_id = d.id
+        SELECT
+            movies.title,
+            movies.genres,
+            directors.name
+        FROM movies
+        JOIN directors ON movies.director_id = directors.id
     """
-
     db.execute(query)
-    results = db.fetchall()
-
-    return results
-
+    movies = db.fetchall()
+    return movies
 
 def late_released_movies(db):
-    '''return the list of all movies released after their director death'''
+    '''
+    Retrieve a list of all movies released after the death of their respective directors.
+    '''
     query = """
-     SELECT m.title
-            FROM directors AS d
-            INNER JOIN movies AS m
-            ON d.id = m.director_id
-            WHERE d.death_year <m.start_year
+        SELECT movies.title
+        FROM directors
+        JOIN movies ON directors.id = movies.director_id
+        WHERE (movies.start_year - directors.death_year) > 0
+        ORDER BY movies.title
     """
-
     db.execute(query)
-    results = db.fetchall()
-
-    return [row[0] for row in results]
-
+    result_set = db.fetchall()
+    movie_titles = [movie[0] for movie in result_set]
+    return movie_titles
 
 def stats_on(db, genre_name):
-    '''return a dict of stats for a given genre'''
-    query = f"""SELECT m.genres, COUNT(*), SUM(m.minutes) / COUNT(*)
-                FROM movies as m
-                WHERE m.genres LIKE "%{genre_name}%"""
-    db.execute(query)
-    results = db.fetchall()
-    result_dict = {
-        'genre': genre_name,
-        'number of movies': results[0][1],
-        'avg_length': results[0][2]
+    '''
+    Retrieve statistics for a given movie genre and return them as a dictionary.
+    '''
+    query = """
+        SELECT
+            genres,
+            COUNT(*) AS movie_count,
+            ROUND(AVG(minutes), 2) AS average_length
+        FROM movies
+        WHERE genres = ?
+    """
+    db.execute(query, (genre_name,))
+    genre_stats = db.fetchone()
+    print(genre_stats)
+
+    return {
+        "genre": genre_stats[0],
+        "number_of_movies": genre_stats[1],
+        "avg_length": genre_stats[2]
     }
-    print(result_dict)
-    return result_dict
 
 def top_five_directors_for(db, genre_name):
-    """return the top 5 of the directors with the most movies for a given genre"""
+    '''
+    Retrieve the top 5 directors with the most movies in a given genre and return them as a list.
+    '''
     query = """
-    SELECT directors.name, COUNT(*) as director_count
-    FROM movies as m
-    LEFT JOIN directors ON m.director_id = directors.id
-    WHERE m.genres LIKE "%ACTION%"
-    GROUP BY directors.name
-    ORDER BY director_count DESC
-    LIMIT 5
-"""
-    db.execute(query)
-    results = db.fetchall()
+        SELECT
+            directors.name AS director_name,
+            COUNT(*) AS movie_count
+        FROM movies
+        JOIN directors ON movies.director_id = directors.id
+        WHERE movies.genres = ?
+        GROUP BY director_name
+        ORDER BY movie_count DESC, director_name
+        LIMIT 5
+    """
+    db.execute(query, (genre_name,))
+    top_directors = db.fetchall()
 
-    return results
+    return top_directors
 
 def movie_duration_buckets(db):
     '''return the movie counts grouped by bucket of 30 min duration'''
-    pass  # YOUR CODE HERE
-
+    query = '''SELECT movies.minutes/30 AS bin,
+                COUNT(*) AS count
+                FROM movies
+                GROUP BY bin'''
+    db.execute(query)
+    results = db.fetchall()
+    results.pop(0)
+    index= [result[0]*30 for result in results]
+    count = [result[1] for result in results]
+    final_list = [((index[i]+30), count[i]) for i in range(0, len(index))]
+    print(final_list)
+    return final_list
 
 def top_five_youngest_newly_directors(db):
     '''return the top 5 youngest directors when they direct their first movie'''
-    pass  # YOUR CODE HERE
+    query = '''SELECT directors.name, (m.start_year - directors.birth_year) AS age
+                FROM movies as m
+                LEFT JOIN directors ON m.director_id = directors.id
+                WHERE age BETWEEN 1 AND 88
+                ORDER BY age
+                LIMIT 5'''
+    db.execute(query)
+    results = db.fetchall()
+    print(results)
+    return results
